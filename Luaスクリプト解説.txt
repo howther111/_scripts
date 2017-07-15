@@ -1,0 +1,352 @@
+メモリリークに対処するためLuaバインディングを変更し、Luaのバージョンも5.2から5.1に下げた
+import,goto,Vector3オペレータ等が使用不能になりVer.0.153以前用のスクリプトは修正が必要
+※trainer.txtやracer.txtを見れば修正方法は解るはず
+「vec3 = vec1 + vec2」のように記述できなくなったので、暫定処置としてAutoPilotクラスに関数を追加した
+※この解説テキストの最後にCライクな計算補助(ベクトル加減乗除)関数がある
+
+このフォルダにLuaスクリプト(*.txt,UTF-8)を置き、BUILD-SystemMenu-Advanced-LuaScriptNameでスクリプト名を指定すると
+自動制御クラス(AutoPilot)に使用される
+F7で自動操縦のDEBUG/ON/OFFを切り替え可能 ※DEBUG=デバッグ情報を表示しながら自動制御
+
+Luaスクリプト冒頭の「import "UnityEngine"」によりUnityの標準クラス(Time,Random,etc.)が使用可能
+リファレンスマニュアルのTimeクラスのページは
+http://docs.unity3d.com/ScriptReference/Time.html
+
+Luaの文法については
+http://milkpot.sakura.ne.jp/lua/lua53_manual_ja.html
+などを参照
+
+ap:AnyFunction(param)でAutoPilotクラスが持つ関数を呼ぶことができる
+この関数群により探索およびアクション切り替えを行ってマシンを制御するのが基本
+
+StartAction(後述)で実行中のアクションは右下に列挙される
+※PRACTICEで自機と敵機の双方が自動操縦の場合は上書きされる(どちらが表示されるかは不定)
+
+SearchEnemy()を呼ぶと捕捉中の敵が黄色の線で示される
+SearchThreat()を呼ぶと検出した攻撃オブジェクトが紫の線,その速度が白の線で示される
+Aim()を呼ぶと視線が水色の線で示される
+※上記の実行中アクション表示とともに、AutoPilotモードがDEBUG(F7で切り替え)の場合のみ有効
+
+
+----------------------------------------------------------------------------------------------------
+AutoPilotクラスの仕様
+----------------------------------------------------------------------------------------------------
+・SearchEnemy()の探索範囲は前1000m,上下左右667m,後333mの変形した球
+・SearchFriend()の探索範囲はワールド全体
+・敵として捕捉中の中立マシンを味方として捕捉開始すると敵ではなくなる
+・味方として捕捉中の中立マシンは敵として扱われず、敵探索の対象にもならない
+・敵との間に遮蔽物があると捕捉が解除され、遮蔽中は探索から除外される
+・Launcherチャージ中のロックオンは自動で行われる(結果はCheckLockOn()で確認)
+・自動制御中の手動操作は常に有効(エイミング等の処理が干渉する場合は自動が優先)
+
+ボスのマルチエイム&マルチロックはパーツのグループ別に行う
+そのため、同時にエイム(ロック)可能な数=クループ数=8(0～7)
+連動させたいTracker(Launcher)のグループを揃える必要がある
+※サンプルボスマシン(BOSS_Pole)およびスクリプト(pole.txt)参照
+
+
+----------------------------------------------------------------------------------------------------
+AutoPilotクラスの公開関数一覧
+----------------------------------------------------------------------------------------------------
+--自機の状態----------------------------------------------------------------------------------------
+int GetHealth()…自機のヘルス(%)を取得する
+
+int GetEnergy()…自機のエナジー(%)を取得する
+
+int GetSurvivalRate(string mame)…アクションに対応するパーツの残存率(%)を取得する
+	name:ASSIGNで登録したアクションの名前
+※当該アクションを実行することで動作する全パーツが対象
+
+Vector3 GetPosition()…自機の座標(x,y,z)を取得する
+
+Vector3 GetVelocity()…自機の速度(ベクトル)を取得する
+float GetSpeed()…自機の速度(スカラ)を取得する
+
+int GetDirection()…自機の方位(-180～180°,北(Planetでは極)が0)を取得する
+
+Vector3 GetRight()…自機の右方向単位ベクトルを取得する
+Vector3 GetUp()…自機の上方向単位ベクトルを取得する
+Vector3 GetForward()…自機の前方向単位ベクトルを取得する
+
+Vector3 GetGravity()…重力方向単位ベクトルを取得する
+※ワールドおよびステージ(予定)により変化する
+
+int GetTilt()…マシンの傾き(0～180°,水平なら0)を取得する
+int GetPitch()…マシンのピッチ角(-180～180°,水平なら0)を取得する
+int GetBank()…マシンのバンク角(-180～180°,水平なら0)を取得する
+
+bool CheckAction(string name)…アクションが実行中か調べる
+	name:ASSIGNで登録したアクションの名前
+※StartAction()により実行しているもののみ(=手動操作によるものは無視)
+
+bool CheckLockOn()…ロックオン中か調べる
+※Launcherをチャージすると自動でロックオン処理が行われる(対象の動きにより時間がかかったり解除されたりする)
+
+bool CheckOnline()…オンラインか調べる
+bool CheckGame()…競技中か調べる
+
+string GetMachineName()…自動操縦中のマシンの名前を取得する
+
+--自機の行動----------------------------------------------------------------------------------------
+void StartAction(string name, int duration)…アクションを開始する
+	name:ASSIGNで登録したアクションの名前
+	duration:継続期間(フレーム数,60で1秒,-1で永続)
+※継続期間中は割り当てたキーを押したままの状態になる
+
+void EndAction(string name)…アクションを停止する
+	name:ASSIGNで登録したアクションの名前
+※StartActionで期間を永続にした場合,指定フレーム経過前に強制停止したい場合 に使用する
+
+void Aim(Vector3 pos)…指定座標にTrackerを向ける
+	pos:任意の座標
+※指定座標を向くまでには時間がかかるので継続して実行する必要がある
+※実行中はマウスによるTrackerの操作が無効になる
+
+void SetAimTolerance(int degrees)…指定座標の方向とCannon&Beamer発射方向のズレの許容値を設定する
+	degrees:角度(0～180°)
+※小さい値を設定するとENを節約できるがチャンスを逃しやすい(デフォルトは45°)
+※0を設定するとほぼ発射不能になる,180を設定すると敵が真逆にいても発射する
+
+void TurnMover(Vector3 pos)…Moverで指定座標に向けて旋回する
+	pos:座標
+※指定座標を向くまでには時間がかかるので継続して実行する必要がある
+※実行中はマウスによるMoverの操作が無効になる
+
+void SetMoverAltitude(int alt)…Moverの指定対地高度を設定する
+	alt:高度(m)
+
+void Recover()…マシンを起き上がらせる
+※F8と同等
+
+void Suicide()…自爆
+※Modifier+F8と同等
+
+void PlaySoundLoop(string name, int volume, int pitch)…ループ3Dサウンドを再生する
+	name:拡張子抜きのサウンドファイル名(UserData\_sounds\*.wav)
+	volume:音量(0～100%)
+	pitch:音程(1～∞%)
+※マシンのコア座標で再生する(遠いほど音が小さくなる)
+
+void PlaySound3D(string name, int volume)…3Dサウンドを再生する
+	name:拡張子抜きのサウンドファイル名(UserData\_sounds\*.wav)
+	volume:音量(0～100%)
+※マシンのコア座標で再生する(遠いほど音が小さくなる)
+
+void PlaySound2D(string name, int volume)…2Dサウンドを再生する
+	name:拡張子抜きのサウンドファイル名(UserData\_sounds\*.wav)
+	volume:音量(0～100%)
+※カメラ座標で再生する(音の大きさは指定どおり)
+
+--対敵マシン----------------------------------------------------------------------------------------
+void SearchEnemy()…最も近い敵マシンを探索する(結果は別の関数で取得する)
+※近さの判定はスコアリング(距離が2倍だとスコアが1/2,背後は正面に比べてスコアが1/3)により行われる
+※敵を見失うまでターゲットを捕捉し続ける(激しく動くほど短時間で見失う)
+※毎フレーム呼ぶとターゲットが連続して切り替わる可能性がある
+※捕捉中のターゲットを上書きする
+
+void SelectEnemy(KeyCode kc)…画面中央付近の敵マシンを捕捉する(画面中央なら1000mまで)
+※指定キーを離した瞬間にのみ判定が行われるため、通常は毎フレーム呼ぶ
+※0.5秒以上指定キーを押し続けると捕捉を中止する(ForgetEnemyと同じ効果)
+※成功すると捕捉中のターゲットを上書きする
+
+void ForgetEnemy()…捕捉中の敵マシンを忘れる
+
+bool CheckEnemy()…捕捉中の敵マシンの有無を取得する
+
+Vector3 GetEnemyPosition()…捕捉中の敵マシンの座標を取得する
+※捕捉中でなければVector3.zeroを返す
+※Beamer使用中は座標にノイズが含まれる(必中になるのを防ぐため)
+
+Vector3 GetEnemyVelocity()…捕捉中の敵マシンの速度(ベクトル)を取得する
+float GetEnemySpeed()…捕捉中の敵マシンの速度(スカラ)を取得する
+※捕捉中でなければ0(Vector3.zero)を返す
+
+int GetEnemyDistance()…捕捉中の敵マシンまでの距離(m)を取得する
+※捕捉中でなければ9999を返す
+
+int GetEnemyAngleR()…捕捉中の敵マシンの水平角度(-180～180°,右が正)を取得する
+int GetEnemyAngleU()…捕捉中の敵マシンの仰角(-90～90°,上が正)を取得する
+※捕捉中でなければ0を返す
+
+string GetEnemyName()…捕捉中の敵マシンの名前を取得する
+
+void SetAutoLockon(bool flag)…自動ロックオンの有効/無効を切り替える
+
+--対ハンター(ボス専用)-------------------------------------------------------------------------------
+int GetNumHunter()…見えているハンターの数を取得する
+※0<=hunterID<GetNumHunter()
+
+Vector3 GetHunterCorePosition(int hunterID)…ハンターのコア座標を取得する
+Vector3 GetHunterCenterPosition(int hunterID)…ハンターの中心座標を取得する
+
+Vector3 GetHunterVelocity(int hunterID)…ハンターの速度(ベクトル)を取得する
+float GetHunterSpeed(int hunterID)…ハンターの速度(スカラ)を取得する
+
+int GetHunterDistance(int hunterID)…ハンターまでの距離(m)を取得する
+
+Vector3 GetHunterLocalDirection(int hunterID)…ハンターの方向を取得する
+※コアパーツが基準
+
+int GetNearestHunterID(int x, int y, int z, int maxDist, float minIP)…最も近いハンターのIDを取得する
+	x,y,z:サーチ方向ベクトル(x:右成分,y:上成分,z:前成分) ※-1,1,0なら左斜め上
+	maxDist:距離上限
+	minIP:内積下限 ※0.7なら内角90度のコーン,0.0なら半球,-1.0なら全方位
+※ベクトルはコアを基準にした方向なので、マシンの姿勢に依存する
+※指定領域にハンターがいない場合は-1を返す
+
+void SetAimPosition(int groupID, Vector3 position)…Trackerを指定した座標に向ける
+※指定したグループに属するTrackerのみが対象
+※positionにVector3.zeroを指定するとエイム停止
+
+void LockHunter(int groupID, int hunterID)…Launcherで指定したハンターをロックする
+※指定したグループに属するLauncherのみが対象
+※hunterIDに-1を指定するとロック解除
+
+string GetHunterName(int hunterID)…ハンターの名前を取得する
+
+--対味方マシン-------------------------------------------------------------------------------
+void SearchFriend(string name)…指定した名前のマシンを探す(結果は別の関数で取得する)
+	name:マシン名orユーザー名("a"でサーチすると最初に見つけた"a"が名前に含まれるマシンを捕捉)
+※PRACTICEの敵マシン(味方でもある)は名前に関係なく捕捉
+※名前を""(指定なし)にすると、最も近い味方(or中立)マシンを捕捉
+
+void ForgetFriend()…捕捉中の味方マシンを忘れる
+
+bool CheckFriend()…捕捉中の味方マシンの有無を取得する
+
+Vector3 GetFriendPosition()…捕捉中の味方マシンの座標を取得する
+※捕捉中でなければVector3.zeroを返す
+
+int GetFriendDistance()…捕捉中の味方マシンまでの距離(m)を取得する
+※捕捉中でなければ9999を返す
+
+int GetFriendAngleR()…捕捉中の味方マシンの水平角度(-180～180°,右が正)を取得する
+int GetFriendAngleU()…捕捉中の味方マシンの仰角(-90～90°,上が正)を取得する
+※捕捉中でなければ0を返す
+
+string GetFriendName()…捕捉中の味方マシンの名前を取得する
+
+--対攻撃オブジェクト--------------------------------------------------------------------------------
+void SearchThreat(int mask, float range)…最も近い敵の攻撃を探索する(結果は別の関数で取得する)
+	mask:探索する攻撃の種類(bit0:通常弾,1:戦車砲弾,2:榴弾,3:ブレード,4:プラズマ,5:レーザー,6:ミサイル)
+	range:探索領域(球)の半径(1～1000m)
+※遠ざかる弾と自分を追尾していないプラズマは除外される
+※移動を考慮しないため毎フレーム呼ぶ必要がある
+
+void SetCounterSearch(float maxEnemyDist)…SearchThreatで検出した攻撃オブジェクトのオーナーを捕捉する
+	maxEnemyDist:攻撃者探索領域(球)の半径 ※500以下が適切(遠い敵を捕捉してもすぐに見失うため)
+※捕捉に成功すると設定がクリアされ、SetCounterSearch(0)を実行するのと同じ状態になる
+※捕捉中のターゲットを上書きする
+
+bool CheckThreat()…検出した攻撃オブジェクトの有無を取得する
+
+Vector3 GetThreatPosition()…検出した攻撃オブジェクトの座標を取得する
+※未検出の場合はVector3.zeroを返す
+
+Vector3 GetThreatVelocity()…検出した攻撃オブジェクトの速度(ベクトル)を取得する
+float GetThreatSpeed()…検出した攻撃オブジェクトの速度(スカラ)を取得する
+※Swordは0.1秒で自機のコアに到達する,Beamerは常時秒速10km ということにして速度を算出している
+※未検出の場合は0(Vector3.zero)を返す
+
+int GetThreatDistance()…検出した攻撃オブジェクトまでの距離(m)を取得する
+※捕捉中でなければ9999を返す
+
+int GetThreatAngleR()…検出した攻撃オブジェクトの水平角度(-180～180°,右が正)を取得する
+int GetThreatAngleU()…検出した攻撃オブジェクトの仰角(-90～90°,上が正)を取得する
+※捕捉中でなければ0を返す
+
+--対マップ-----------------------------------------------------------------------------------------
+int GetGroundClearance()…対地高度(m)を取得
+※標高でなく(ステージを含む)地面までの垂直距離を求める
+
+int MeasureClearance(int x, int y, int z, int range)…コアから指定方向にある壁&地面までの距離を測る
+int MeasureClearanceToWall(int x, int y, int z, int range)…水平に補正したコアから指定方向にある壁までの距離を測る
+	x,y,z:計測方向ベクトル(x:右成分,y:上成分,z:前成分) ※-1,1,0なら左斜め上
+	range:計測距離
+※ベクトルはコアを基準にした方向なので、マシンの姿勢に依存する
+※距離が長いほど処理が重くなることに注意(1フレームに何度も呼ばなければ問題ない)
+※何も無い場合は9999を返す
+
+Vector3 GetNextGatePosition()…次のゲートの座標を取得する(Race専用)
+※見つからない場合はVector3.zeroを返す
+
+int GetNextGateDistance()…次のゲートまでの距離(m)を取得する(Race専用)
+※見つからない場合は9999を返す
+
+int GetNextGateAngleR()…次のゲートの水平角度(-180～180°,右が正)を取得する(Race専用)
+int GetNextGateAngleU()…次のゲートの仰角(-90～90°,上が正)を取得する(Race専用)
+※見つからない場合は0を返す
+
+--ライン描画----------------------------------------------------------------------------------------
+void SetLogicalScreenHeight(float height)…DrawLine2D用の論理スクリーン縦解像度設定
+※実際のスクリーンとの縦解像度の比によりスケールされる
+※デフォルト(=0)の場合はスケールしない
+
+void DrawLine2D(Color color, Vector2 vtx1, Vector2 vtx2)…スクリーンのvtx1とvtx2を結ぶ線分を指定した色で描画する
+void DrawLine2D(Color color)…2Dラインの色を変更する
+void DrawLine2D(Vector2 vtx1, Vector2 vtx2)…スクリーンのvtx1とvtx2を指定済みの(前回と同じ)色で描画する
+
+void MakePattern2D(string name)…後続のDrawLine2Dをキャンセルし、2D図形の一部として登録する
+	name:図形の名前
+※MakePattern2D(nil)またはMakePattern2D("")で通常のライン描画に戻る
+
+void DrawPattern2D(string name, Color color, Vector2 pos)…指定したスクリーン座標に作成済みの図形を描画する
+void DrawPattern2D(string name, Color color, Vector2 pos, Vector2 scale)…スケーリングして描画する
+	name:図形の名前
+	color:色
+	pos:位置
+	scale:倍率
+
+void DrawGraphAdd(string name, float val, int num, Color color, Vector2 pos, Vector2 scale)…グラフを描画する
+void DrawGraph(string name, Color color, Vector2 pos, Vector2 scale)…要素を追加せずに既存のグラフを描画する
+	name:グラフの名前
+	val:最新要素の値
+	num:要素数(溢れたら古い要素を削除する)
+	color:色
+	pos:位置
+	scale:倍率
+
+void DrawLine3D(Color color, Vector3 vtx1, Vector3 vtx2)…ワールドのvtx1とvtx2を結ぶ線分を描画する
+void DrawLine3D(Color color)…3Dラインの色を変更する
+void DrawLine3D(Vector2 vtx1, Vector2 vtx2)…ワールドのvtx1とvtx2を指定済みの(前回と同じ)色で描画する
+
+void MakePattern3D(string name)…後続のDrawLine3Dをキャンセルし、3D図形の一部として登録する
+	name:図形の名前
+※MakePattern3D(nil)またはMakePattern3D("")で通常のライン描画に戻る
+
+void DrawPattern3D(string name, Color color, Vector3 pos)…指定したワールド座標に作成済みの図形を描画する
+void DrawPattern3D(string name, Color color, Vector3 pos, Vector3 scale)…スケーリングして描画する
+	name:図形の名前
+	color:色
+	pos:位置
+	scale:倍率
+
+--計算補助-----------------------------------------------------------------------------------------
+Vector3 AddVec(Vector3 vec1, Vector3 vec2)…ベクトルの和(vec1+vec2)を求める
+Vector3 SubVec(Vector3 vec1, Vector3 vec2)…ベクトルの差(vec1-vec2)を求める
+Vector3 MulVec(Vector3 vec, float s)…スケールしたベクトル(vec*s)を求める
+Vector3 DivVec(Vector3 vec, float s)…スケールしたベクトル(vec/s)を求める
+
+--ユーティリティ------------------------------------------------------------------------------------
+bool CheckValidInput()…入力の正当性チェック(UI操作中はfalseを返す)
+int CalcAngleR(Vector3 destPos)…コアからみた指定座標の水平角度(-180～180°,右が正)を算出する
+int CalcAngleU(Vector3 destPos)…コアからみた指定座標の仰角(-90～90°,上が正)を算出する
+
+Vector3 GetCameraPosition()…カメラの座標(x,y,z)を取得する
+Vector3 GetCameraRight()…カメラの右方向単位ベクトルを取得する
+Vector3 GetCameraUp()…カメラの上方向単位ベクトルを取得する
+Vector3 GetCameraForward()…カメラの前方向単位ベクトルを取得する
+
+--デバッグ-----------------------------------------------------------------------------------------
+void StartLogging()…ファイルへのエラーログ出力を開始する
+※出力先はMcnCraft\logfile.txtで、システムメニューを開くと書き出しが実行される
+
+void Log(string txt)…画面左にログを表示する
+	txt:出力する文字列
+※大量に表示すると流れて読めなくなる
+
+void Print(int lineID, string txt)…画面右に文字列を表示する
+	lineID:行(0～9)
+	txt:出力する文字列
+※時間が経過しても消えないため、常時表示する用途で使用する
+※手動でクリアする場合は空の文字列("")を渡す

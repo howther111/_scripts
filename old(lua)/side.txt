@@ -1,0 +1,91 @@
+--回り込み移動用スクリプト
+--敵を側面に捉えて移動し続ける
+
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Vector3 = UnityEngine.Vector3
+
+local ap
+local exSteer = 0
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--エラーログの記録を開始する(オフラインのみ)
+if ap:CheckOnline() == false then
+	ap:StartLogging()
+end
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--索敵(前方優先で近い敵を選択)
+if ap:CheckEnemy() == false then
+	ap:SearchEnemy()
+	ap:Print(0, "Enemy : " .. ap:GetEnemyName())
+end
+
+--ステアリング(ほぼ真右が真左に敵を捉える,距離に応じて正面に近づける,敵を見失ったら最後に捕捉していた方向へ旋回)
+if ap:CheckEnemy() then
+	local enemyDistance = ap:GetEnemyDistance()
+	local enemyAngleR = ap:GetEnemyAngleR()
+	ap:Print(1, "Distance : " .. enemyDistance)
+	ap:Print(2, "AngleR : " .. enemyAngleR)
+
+	if enemyAngleR < 0 then
+		exSteer = -60
+	else
+		exSteer = 60
+	end
+
+	local adjust = Mathf.Min(enemyDistance * 0.05, 80.0)
+	if enemyAngleR < -(90-adjust) then
+		ap:StartAction("TurnL", 1)
+	elseif enemyAngleR > -(80-adjust) and enemyAngleR <= 0 then
+		ap:StartAction("TurnR", 1)
+	elseif enemyAngleR > 0 and enemyAngleR < 80-adjust then
+		ap:StartAction("TurnL", 1)
+	elseif enemyAngleR > 90-adjust then
+		ap:StartAction("TurnR", 1)
+	else
+		ap:EndAction("TurnL")
+		ap:EndAction("TurnR")
+	end
+elseif exSteer < 0 then
+	ap:StartAction("TurnL", -exSteer)
+	exSteer = 0
+elseif exSteer > 0 then
+	ap:StartAction("TurnR", exSteer)
+	exSteer = 0
+end
+
+--アクセル
+if ap:CheckEnemy() then
+	ap:StartAction("MoveF", 200)
+end
+
+--転覆から復帰
+if ap:GetTilt() > 60 then
+	ap:Recover()
+end
+
+end

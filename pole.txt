@@ -1,0 +1,132 @@
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Time = UnityEngine.Time
+Random = UnityEngine.Random
+Vector3 = UnityEngine.Vector3
+Input = UnityEngine.Input
+KeyCode = UnityEngine.KeyCode
+
+local ap
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--ランチャーの自動ロックオン開始
+ap:SetAutoLockon(true)
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--オンラインで休憩中なら待機
+if ap:CheckOnline() and not ap:CheckGame() then
+	ap:EndAction("")
+	return
+end
+
+--ハンターが見つからなかったら待機
+local numHunter = ap:GetNumHunter()
+if numHunter == 0 then
+	ap:EndAction("")
+	return
+end
+ap:Print(6, "numHunter:" .. numHunter)
+
+--エイム許容誤差変更(50%なら25°)
+ap:SetAimTolerance(ap:GetEnergy() / 2);
+
+--全ハンターの平均座標を求める
+local sumPos = Vector3.zero
+for i = 0, numHunter-1 do
+	sumPos = ap:AddVec(sumPos, ap:GetHunterCenterPosition(i))
+end
+local destPos = ap:DivVec(sumPos, numHunter)
+
+--目標に向かって旋回する
+local angleR = ap:CalcAngleR(destPos)
+if angleR < -5 then
+	ap:StartAction("TurnL", 2)
+elseif angleR > 5 then
+	ap:StartAction("TurnR", 2)
+end
+
+--目標にピッチ角を合わせる
+if ap:MeasureClearance(0,0,1,100) < 100 or ap:MeasureClearance(0,-1,2,50) < 50 then
+	ap:StartAction("Avoid", 10)	--正面に障害物があったら上に回避
+else
+	local angleU = ap:CalcAngleU(destPos)
+	if angleU < -5 then
+		ap:StartAction("TurnD", 2)
+	elseif angleU > 5 then
+		ap:StartAction("TurnU", 2)
+	end
+	ap:StartAction("MoveF", 2)	--正面に障害物がなかったら前進
+end
+
+--方向(=グループ)別の攻撃
+attack(0,0,1,"Shoot0",0)		--Beamer前
+attack(0,1,0,"Shoot1",1)		--Beamer上
+attack(-1,0,0,"Shoot2",2)	--Cannon左
+attack(1,0,0,"Shoot3",3)		--Cannon右
+attack(0,-1,0,"Shoot4",4)	--Cannon下
+
+--Launcherチャージ開始(ロックしていなくても200フレーム後に発射)
+if (Time.frameCount % 300) == 0 and ap:GetEnergy() > 10 then
+	ap:StartAction("Plasma", 200)
+end
+
+--底面側にハンターがいたら爆弾投下
+for i = 0, numHunter-1 do
+	if ap:GetHunterLocalDirection(i).y < -0.8 then
+		ap:StartAction("Bomb", 1)
+		break
+	end
+end
+
+--転覆から復帰
+if ap:GetTilt() > 120 then
+	ap:Recover()
+end
+
+end
+
+--------------------------------------------------------------------------------
+--攻撃
+--------------------------------------------------------------------------------
+function attack(x, y, z, actionName, groupID)
+
+local hunterID = ap:GetNearestHunterID(x, y, z, 500, 0.5)
+
+ap:Print(groupID, "hunter" .. hunterID .. ":" .. ap:GetHunterName(hunterID))
+
+if hunterID >= 0 then
+	local aimPos = ap:GetHunterCenterPosition(hunterID)
+	if groupID > 1 then	--Cannonは偏差射撃
+		local relVel = ap:SubVec(ap:GetHunterVelocity(hunterID), ap:GetVelocity())	--相対速度
+		aimPos = ap:AddVec(aimPos, ap:MulVec(relVel, 0.2)) --着弾予測座標
+	end
+	ap:SetAimPosition(groupID, aimPos)
+	ap:LockHunter(groupID, hunterID)
+	ap:StartAction(actionName, 10)
+end
+
+end
+

@@ -1,0 +1,87 @@
+--VTOL(サンプルマシン)用スクリプト
+--壁や地面を避けながら近くのマシンを追い続ける
+--SearchFriendのパラメータで名前を指定すると、任意のマシンをターゲットする
+
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Vector3 = UnityEngine.Vector3
+
+local ap
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--味方マシンを忘れる(=再探索する)
+ap:ForgetFriend()
+ap:Log("ForgetFriend")
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--味方マシン探索
+if ap:CheckFriend() == false then
+	--ap:SearchFriend("Author")
+	--ap:SearchFriend("Trainer")
+	ap:SearchFriend("")
+	ap:Print(0, "Friend : " .. ap:GetFriendName())
+end
+
+--旋回(味方の方を向く)
+local friendAngleR = ap:GetFriendAngleR()
+if friendAngleR < -5 then
+	ap:StartAction("TurnL", 2)
+elseif friendAngleR > 5 then
+	ap:StartAction("TurnR", 2)
+end
+
+--水平移動(味方に近寄る,近かったら出力を下げる)
+if ap:CheckFriend() then
+	local friendDistance = ap:GetFriendDistance()
+	if friendDistance > 200 then
+		ap:StartAction("MoveF", 2)
+	elseif friendDistance > 50 then
+		ap:StartAction("SlowF", 2)
+	end
+end
+
+--垂直移動(正面の壁と地面を避ける,味方に高度をあわせる)
+local friendAngleU = ap:GetFriendAngleU()
+if ap:MeasureClearance(0,0,1,20) < 20 then
+	ap:Log("Avoid wall.")
+	ap:EndAction("MoveF")
+	ap:StartAction("MoveB", 2)
+	ap:StartAction("MoveU", 2)
+elseif ap:GetGroundClearance() < 10 then
+	ap:Log("Avoid ground.")
+	ap:StartAction("MoveU", 2)
+elseif friendAngleU > 5 then
+	ap:StartAction("MoveU", 2)
+elseif friendAngleU < -5 then
+	ap:StartAction("MoveD", 2)
+end
+
+--転覆から復帰
+if ap:GetTilt() > 60 then
+	ap:Recover()
+end
+
+end

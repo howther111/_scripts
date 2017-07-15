@@ -1,0 +1,48 @@
+--ループSE再生テスト用スクリプト
+--1キーを押している間だけループSEを再生,同時に2キーを押すとボリューム&ピッチアップ
+
+UnityEngine = luanet.UnityEngine
+Input = UnityEngine.Input
+KeyCode = UnityEngine.KeyCode
+
+local ap
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--エラーログの記録を開始する(オフラインのみ)
+if ap:CheckOnline() == false then
+	ap:StartLogging()
+end
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+if Input.GetKey(KeyCode.Alpha1) then
+	if Input.GetKey(KeyCode.Alpha2) then
+		ap:PlaySoundLoop("hit", 100, 200)
+	else
+		ap:PlaySoundLoop("hit", 50, 100)
+	end
+end
+
+end

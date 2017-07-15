@@ -1,0 +1,73 @@
+--Mortar(サンプルマシン)用スクリプト
+--榴弾砲の飛距離を調整する
+
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Vector3 = UnityEngine.Vector3
+
+local ap
+local chargeWait = 0
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+--エイム方向と砲身の内角が15度以内になるまでCannon&Beamerを待機状態にする
+ap:SetAimTolerance(15);
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--原点から離れる
+if Mathf.Abs(ap:GetPosition().z) < 150 then
+	if ap:GetPosition().z > 0 then
+		ap:StartAction("MoveF", 150)
+	else
+		ap:StartAction("MoveB", 150)
+	end
+end
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--索敵(前方優先で近い敵を選択)
+if ap:CheckEnemy() == false then
+	ap:SearchEnemy()
+end
+local enemyDistance = ap:GetEnemyDistance()
+
+--情報表示
+ap:Print(0, "Enemy : " .. ap:GetEnemyName())
+ap:Print(1, "Distance : " .. enemyDistance)
+ap:Print(2, "AngleR : " .. ap:GetEnemyAngleR())
+
+--エナジーチェック(少なくなったら5秒休憩)
+if ap:GetEnergy() < 10 then
+	chargeWait = 300
+elseif chargeWait > 0 then
+	chargeWait = chargeWait - 1
+end
+
+--エイム&攻撃(敵の速度と距離を考慮して目標座標を補正)
+if chargeWait == 0 and enemyDistance < 350 then
+	local estPos = ap:AddVec(ap:GetEnemyPosition(), ap:MulVec(ap:GetEnemyVelocity(), enemyDistance * 0.008))
+	ap:Aim(ap:SubVec(estPos, ap:MulVec(ap:GetGravity(), enemyDistance * enemyDistance * 0.001)))
+	ap:StartAction("Cannon", 1)
+end
+
+end

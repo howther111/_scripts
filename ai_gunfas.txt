@@ -1,0 +1,150 @@
+﻿--AI_GUNFAS用スクリプト
+
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Time = UnityEngine.Time
+Random = UnityEngine.Random
+Vector3 = UnityEngine.Vector3
+
+local ap
+local startPosition = Vector3.zero
+local attackAction = "ATK1"
+local chargeCount = 0
+local suicideWait = 0
+local wait = 0
+local count = 0
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+--エイム許容誤差設定
+ap:SetAimTolerance(15);
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始&再開時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--射撃モード
+ap:StartAction("AIM", 10)
+
+--開始座標保存
+startPosition = ap:GetPosition()
+
+--カウンターリセット
+count = 0
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--待機
+if wait > 0 then
+	wait = wait - 1
+	ap:Log("wait=" .. wait)
+	return
+end
+
+--自爆演出(右回転+上昇→自爆)
+if suicideWait > 0 then
+	ap:TurnMover(ap:AddVec(ap:GetPosition(), ap:GetRight()))
+	ap:SetMoverAltitude(100)
+	suicideWait = suicideWait -1
+	if suicideWait == 0 then
+		ap:Suicide()
+	end
+	return
+end
+
+--索敵(前方優先で近い敵を選択,攻撃を検出したら捕捉対象を変更)
+if ap:CheckEnemy() == false then
+	ap:SearchEnemy()
+end
+if count % 600 == 0 then
+	ap:SetCounterSearch(500)
+end
+local enemyDistance = ap:GetEnemyDistance()
+local enemyAngleR = ap:GetEnemyAngleR()
+local enemyAngleU = ap:GetEnemyAngleU()
+local enemyVelocity = ap:GetEnemyVelocity()
+
+--情報表示
+ap:Print(0, "Enemy : " .. ap:GetEnemyName())
+ap:Print(1, "Distance : " .. enemyDistance)
+ap:Print(2, "AngleR : " .. enemyAngleR)
+ap:Print(3, "AngleU : " .. enemyAngleU)
+ap:Print(4, "Speed(m/s) : " .. Mathf.RoundToInt(Vector3.Magnitude(enemyVelocity)))
+if Time.frameCount % 60 == 0 then
+	--ap:Print(8, "Random : " .. Random.Range(0,99))
+	ap:Print(9, "MEM=" .. math.floor(collectgarbage("count")) .. "KB")
+end
+
+if ap:CheckEnemy() then
+	local relVel = ap:SubVec(ap:GetEnemyVelocity(), ap:GetVelocity())	--相対速度
+	local estPos = ap:AddVec(ap:GetEnemyPosition(), ap:MulVec(relVel, 0.2)) --着弾予測座標
+	ap:TurnMover(estPos) --旋回(Mover専用)
+	ap:Aim(estPos) --エイム
+end
+
+--武器選択&通知
+attackAction = "ATK1"
+
+--攻撃中止
+local energy = ap:GetEnergy()
+if math.abs(enemyAngleR) > attackAngle*2 or energy < 10 or isWeaponChanged or not ap:CheckEnemy() then
+	ap:EndAction("ATK1")
+end
+
+--攻撃開始(ダメージを受けた後ENに余裕があったら選択中の武器で攻撃,下方に敵がいたらグレネード)
+if ap:CheckEnemy() then
+	if math.abs(enemyAngleR) < attackAngle and energy > attackEnergy then
+		ap:StartAction(attackAction, -1)
+	end
+end
+
+--水平移動(脅威を回避してターゲットとの距離を保つ,至近距離なら近づく,暇なら開始座標に戻る)
+ap:SearchThreat(63, 100)
+if ap:CheckThreat() then
+	if ap:GetThreatAngleR() < 0 then
+		ap:StartAction("a", 10)
+	else
+		ap:StartAction("d", 10)
+	end
+elseif ap:CheckEnemy() then
+	if energy < 30 then
+		ap:StartAction("s", 10)
+	else
+		ap:StartAction("w", 10)
+
+	end
+elseif Vector3.Distance(ap:GetPosition(), startPosition) > 50 then
+	ap:TurnMover(startPosition)
+	ap:SetMoverAltitude(10)
+	ap:StartAction("w", 10)
+end
+
+--垂直移動(敵を少し見上げる)
+if chargeCount > 0 then
+	ap:SetMoverAltitude(100)
+elseif ap:CheckEnemy() then
+	if enemyAngleU < 5 then
+		ap:StartAction("上昇", 10)
+	end
+end
+
+count = count + 1
+
+end

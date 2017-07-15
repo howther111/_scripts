@@ -1,0 +1,112 @@
+--Car(サンプルマシン)用スクリプト
+--レース中:ゲートを辿って周回する
+--オフライン:味方マシンを追う
+
+LuaUtil = luanet.LuaUtil
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Time = UnityEngine.Time
+Random = UnityEngine.Random
+Vector3 = UnityEngine.Vector3
+
+local ap
+local steer = 0
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+local gateDistance
+local gateAngleR
+if ap:CheckOnline() == false then
+	--フレンド情報取得(テストのためゲートの代わりに味方マシンを追う)
+	if ap:CheckFriend() == false then
+		ap:SearchFriend("")
+	end
+	gateDistance = ap:GetFriendDistance()
+	gateAngleR = ap:GetFriendAngleR()
+elseif ap:CheckGame() then
+	--ゲート情報取得
+	gateDistance = ap:GetNextGateDistance()
+	gateAngleR = ap:GetNextGateAngleR()
+else
+	return
+end
+
+--情報表示
+ap:Print(0, "Distance : " .. gateDistance)
+ap:Print(1, "AngleR : " .. gateAngleR)
+--ap:Print(6, "Random : " .. Mathf.RoundToInt(Random.Range(0,99)))
+
+--壁探索
+local leftWall = ap:MeasureClearanceToWall(-1, 0, 2, 25)
+local rightWall = ap:MeasureClearanceToWall(1, 0, 2, 25)
+if leftWall < rightWall then
+	rightWall = 999	--両側に壁がある場合の対処(より近い壁を回避)
+end
+
+ap:Print(4, "L : " .. leftWall)
+ap:Print(5, "R : " .. rightWall)
+
+--ステアリング
+ap:Print(3, "")
+if rightWall < 99 then
+	steer = -3
+	ap:StartAction("TurnL3", 1)
+	ap:Print(3, "Avoid to the left.")
+elseif leftWall < 99 then
+	steer = 3
+	ap:StartAction("TurnR3", 1)
+	ap:Print(3, "Avoid to the right.")
+elseif gateAngleR < -90 then
+	steer = -3
+	ap:StartAction("TurnL3", 1)
+elseif gateAngleR < -30 then
+	steer = -2
+	ap:StartAction("TurnL2", 1)
+elseif gateAngleR < 0 then
+	steer = -1
+	ap:StartAction("TurnL1", 1)
+	ap:Print(2, "Steer L1")
+elseif gateAngleR > 90 then
+	steer = 3
+	ap:StartAction("TurnR3", 1)
+elseif gateAngleR > 30 then
+	steer = 2
+	ap:StartAction("TurnR2", 1)
+elseif gateAngleR > 0 then
+	steer = 1
+	ap:StartAction("TurnR1", 1)
+end
+ap:Print(2, "Steer : " .. steer)
+
+--アクセル
+ap:StartAction("MoveF", 1)
+
+--転覆から復帰
+if ap:GetBank() > 60 or ap:GetPitch() > 80 then
+	ap:Recover()
+end
+
+end

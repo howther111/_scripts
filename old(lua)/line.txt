@@ -1,0 +1,90 @@
+--ライン描画テスト用スクリプト
+
+UnityEngine = luanet.UnityEngine
+Vector3 = UnityEngine.Vector3
+Vector2 = UnityEngine.Vector2
+Color = UnityEngine.Color
+Mathf = UnityEngine.Mathf
+Random = UnityEngine.Random
+Time = UnityEngine.Time
+
+local ap
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+--エラーログの記録を開始する(オフラインのみ)
+if ap:CheckOnline() == false then
+	ap:StartLogging()
+end
+
+--DrawLine2Dのための論理スクリーンサイズを設定する
+--未設定or0なら物理スクリーンサイズが設定される
+ap:SetLogicalScreenHeight(720)	--イメージしやすいためHD(1280*720)の縦解像度を設定する
+
+--2D図形を作成する
+ap:MakePattern2D("test2D")
+for i = 0, 360 do
+	ap:DrawLine2D(Vector2(Mathf.Cos(i) * 200, Mathf.Sin(i) * 200), Vector2(Mathf.Cos(i+1) * 100, Mathf.Sin(i+1) * 100))
+end
+ap:MakePattern2D(nil)	--終端
+
+--3D図形を作成する
+ap:MakePattern3D("test3D")
+for i = 0, 360 do
+	ap:DrawLine3D(Vector3.zero, Vector3(Mathf.Cos(i) * 100, -100, Mathf.Sin(i) * 100))
+end
+ap:MakePattern3D(nil)	--終端
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--自機前方からワールド原点に3本の線を描画
+local pos = ap:AddVec(ap:GetPosition(), ap:GetForward(20))
+ap:DrawLine3D(Color.yellow, ap:AddVec(pos, ap:GetUp(15)), Vector3.zero)
+ap:DrawLine3D(Color.cyan);
+ap:DrawLine3D(ap:AddVec(pos, ap:GetRight(10)), Vector3.zero)
+ap:DrawLine3D(ap:SubVec(pos, ap:GetRight(10)), Vector3.zero)
+
+--画面中央に3角形を描画
+ap:DrawLine2D(Color.magenta, Vector2(-180,180), Vector2(180,180))
+ap:DrawLine2D(Color.white)
+ap:DrawLine2D(Vector2(-180,180), Vector2.zero)
+ap:DrawLine2D(Vector2(180,180), Vector2.zero)
+
+--作成済みの2D図形を描画
+ap:DrawPattern2D("test2D", Color.red, Vector2(-100,200))
+ap:DrawPattern2D("test2D", Color.green, Vector2(100,200), Vector2(1.5,0.5))
+
+--作成済みの3D図形を描画
+ap:DrawPattern3D("test3D", Color.gray, Vector3(0, 110, 0))
+ap:DrawPattern3D("test3D", Color.white, Vector3(0, 110, 0), Vector3(0.5, 1.0, 0.5))
+
+--折れ線グラフを描画(5フレームに1回更新)
+if Time.frameCount % 5 == 0 then
+	ap:DrawGraphAdd("graph", Random.Range(10.0,100.0), 50, Color.yellow, Vector2(-400,-200), Vector2(5.0, 1.0))
+else
+	ap:DrawGraph("graph", Color.yellow, Vector2(-400,-200), Vector2(5.0, 1.0))
+end
+
+end
+

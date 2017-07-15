@@ -1,0 +1,66 @@
+--汎用自動射撃スクリプト
+--画面の中心付近の敵を手動(任意のキー入力)で捕捉開始する
+--"KeyCode.Mouse1"を"KeyCode.A"に書き換えれば、トリガーを右クリックからAキーに変更できる
+--ショートバレルCannonが基準なので、異なる場合は着弾予測座標の調整が必要
+
+UnityEngine = luanet.UnityEngine
+Mathf = UnityEngine.Mathf
+Vector3 = UnityEngine.Vector3
+KeyCode = UnityEngine.KeyCode
+
+local ap
+
+--------------------------------------------------------------------------------
+--初期化処理(マシン出現時に1回実行)
+--------------------------------------------------------------------------------
+function initialize(_ap)
+
+ap = _ap
+
+--ガベージコレクション設定
+collectgarbage("setpause", 80)
+collectgarbage("setstepmul", 200)
+
+--エイム方向と砲身の内角が15度以内になるまでCannon&Beamerを待機状態にする
+ap:SetAimTolerance(15);
+
+end
+
+--------------------------------------------------------------------------------
+--開始処理(自動制御開始時に1回実行)
+--------------------------------------------------------------------------------
+function start()
+
+end
+
+--------------------------------------------------------------------------------
+--更新処理(毎フレーム実行)
+--------------------------------------------------------------------------------
+function update()
+
+--敵選択(0.5秒以上押し続けると解除)
+ap:SelectEnemy(KeyCode.Mouse1)
+
+--エナジーチェック(10%未満になったら捕捉中止)
+if ap:GetEnergy() < 10 then
+	ap:ForgetEnemy()
+end
+
+--情報取得&表示
+local enemyDistance = ap:GetEnemyDistance()
+ap:Print(0, "Enemy : " .. ap:GetEnemyName())
+ap:Print(1, "Distance : " .. enemyDistance)
+
+--エイム(遠かったら狙わない,エイムに時間がかかるため射撃より遠くから実行)
+if enemyDistance < 400 then
+	local relVel = ap:SubVec(ap:GetEnemyVelocity(), ap:MulVec(ap:GetVelocity(), 0.5))	--相対速度
+	local estPos = ap:AddVec(ap:GetEnemyPosition(), ap:MulVec(relVel, enemyDistance * 0.006)) --着弾予測座標
+	ap:Aim(estPos)
+end
+
+--射撃(遠かったら撃たない)
+if enemyDistance < 300 then
+	ap:StartAction("Cannon", 1)
+end
+
+end
