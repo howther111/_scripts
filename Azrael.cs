@@ -23,19 +23,9 @@ public class Azrael : UserScript {
     KeyCode SwordOn = KeyCode.R; //ビームサイスON・OFF
     KeyCode SwordSlash = KeyCode.Q; //ビームサイス斬撃
     KeyCode SwordSpin = KeyCode.E; //ビームサイス回転
-    KeyCode Wep2 = KeyCode.Mouse2;
-    KeyCode Missile = KeyCode.Keypad6;
-    KeyCode ChangeOptKey = KeyCode.Keypad5;
-    KeyCode LauncherKey = KeyCode.Keypad4;
-    KeyCode AimAssist = KeyCode.Alpha2;
-    KeyCode AimKey = KeyCode.T;
-    KeyCode BoostKey = KeyCode.F;
-    KeyCode MoveF = KeyCode.W;
-    KeyCode MoveB = KeyCode.S;
-    KeyCode MoveU = KeyCode.Space;
-    KeyCode MoveD = KeyCode.LeftShift;
-    KeyCode MoveL = KeyCode.A;
-    KeyCode MoveR = KeyCode.D;
+    KeyCode Wep2 = KeyCode.Mouse1;
+    KeyCode MissileChange = KeyCode.Mouse2;
+    KeyCode Jump = KeyCode.Space;
 
     //----------------------------------------------------------------------------------------------
     // ユーザー名取得
@@ -85,12 +75,33 @@ public class Azrael : UserScript {
         }
 
         //ミサイル
-        if (!missile && energy > 15 && Input.GetKeyDown(Wep2)) {
+        if (!missile && Input.GetKeyDown(Wep2)) {
             ap.StartAction("ATK2", -1);
+            if (missileMode == 1) {
+                ap.StartAction("ATK2-1", -1);
+            } else if (missileMode == 2) {
+                ap.StartAction("ATK2-2", -1);
+            }
             missile = true;
         } else if ((missile && Input.GetKeyDown(Wep2)) || energy < 10) {
             ap.EndAction("ATK2");
+            ap.EndAction("ATK2-1");
+            ap.EndAction("ATK2-2");
             missile = false;
+        }
+
+        //ミサイル切り替え
+        if (Input.GetMouseButtonDown(2) && missileMode == 1 && !missile) {
+            missileMode = 2;
+        } else if (Input.GetMouseButtonDown(2) && missileMode == 2 && !missile) {
+            missileMode = 1;
+        }
+
+        //ジャンプ
+        if (energy > 40 && Input.GetKeyDown(Jump)) {
+            ap.StartAction("Jump", -1);
+        } else {
+            ap.EndAction("Jump");
         }
     }
 }
