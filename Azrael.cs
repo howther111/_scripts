@@ -1,8 +1,12 @@
 // 防術機アズラエル用スクリプト
 // Armoriser3.csを参考にさせていただきました。さくさく様に感謝
 // 作成者:江ノ宮（howther111）
-
+//@auther Sakusakumura[JP]
+//@Version 4.4.5
 using UnityEngine;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
 
 public class Azrael : UserScript {
     // 攻撃検出用マスク
@@ -13,32 +17,36 @@ public class Azrael : UserScript {
 	const int MASK_PLASMA = 16; /// プラズマ(Launcher)
 	const int MASK_LASER = 32;  /// レーザー(Beamer)
 	const int MASK_ALL = 0xff;
-    bool missile = false;
-    bool sword = false;
-    bool spin = false;
-    int missileMode = 1;
+    bool missile;
+    bool sword;
+    bool spin;
+    int missileMode;
 
     //アサイン関係
     KeyCode Wep1 = KeyCode.Mouse0; //マシンガン射撃
     KeyCode SwordOn = KeyCode.R; //ビームサイスON・OFF
     KeyCode SwordSlash = KeyCode.Q; //ビームサイス斬撃
     KeyCode SwordSpin = KeyCode.E; //ビームサイス回転
-    KeyCode Wep2 = KeyCode.Mouse1;
-    KeyCode MissileChange = KeyCode.Mouse2;
-    KeyCode Jump = KeyCode.Space;
+    KeyCode Wep2 = KeyCode.Mouse1; //ミサイルロック・発射
+    KeyCode MissileChange = KeyCode.Mouse2; //ミサイル射撃モード切替
+    KeyCode Jump = KeyCode.Space; //跳躍
 
     //----------------------------------------------------------------------------------------------
     // ユーザー名取得
     //----------------------------------------------------------------------------------------------
     public override string GetUserName() {
-        return "howther111";
+        using (StreamReader sr = new StreamReader(Application.dataPath + "/../UserData/User.mcsd"))
+            return LitJson.JsonMapper.ToObject(sr.ReadToEnd())["userName"].ToString();
     }
 
     //----------------------------------------------------------------------------------------------
     // 開始処理
     //----------------------------------------------------------------------------------------------
     public override void OnStart(AutoPilot ap) {
-
+        missile = false;
+        sword = false;
+        spin = false;
+        missileMode = 1;
     }
 
     //----------------------------------------------------------------------------------------------
@@ -65,11 +73,11 @@ public class Azrael : UserScript {
             ap.StartAction("ATK3BF", 1);
         }
 
-        if (energy > 30 && !spin && Input.GetKeyDown(SwordSlash)) {
+        if (energy > 30 && !spin && Input.GetKeyDown(SwordSpin)) {
             ap.StartAction("spin", -1);
             sword = false;
             spin = true;
-        } else if (spin && (energy < 10 || sword || Input.GetKeyDown(SwordSlash))) {
+        } else if (spin && (energy < 10 || sword || Input.GetKeyDown(SwordSpin))) {
             ap.EndAction("spin");
             spin = false;
         }
@@ -98,9 +106,9 @@ public class Azrael : UserScript {
         }
 
         //ジャンプ
-        if (energy > 40 && Input.GetKeyDown(Jump)) {
+        if (energy > 40 && Input.GetKey(Jump)) {
             ap.StartAction("Jump", -1);
-        } else {
+        } else if (!Input.GetKey(Jump) || energy < 10) {
             ap.EndAction("Jump");
         }
     }
