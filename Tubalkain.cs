@@ -1,4 +1,4 @@
-// 防術機アズラエル用スクリプト
+// 防術機トバルカイン用スクリプト
 // Armoriser3.csを参考にさせていただきました。さくさく様に感謝
 // 作成者:江ノ宮（howther111）
 //@auther Sakusakumura[JP]
@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-public class Azrael : UserScript {
+public class Tubalkain : UserScript {
     // 攻撃検出用マスク
     const int MASK_BULLET = 1;  /// 通常弾(Cannon)
 	const int MASK_SHELL = 2;   /// 戦車砲弾(Cannon)
@@ -20,6 +20,7 @@ public class Azrael : UserScript {
     bool missile;
     bool sword;
     bool spin;
+    bool shieldFlg;
     int missileMode;
 
     //アサイン関係
@@ -28,8 +29,9 @@ public class Azrael : UserScript {
     KeyCode SwordSlash = KeyCode.Q; //ビームサイス斬撃
     KeyCode SwordSpin = KeyCode.E; //ビームサイス回転
     KeyCode Wep2 = KeyCode.Mouse1; //ミサイルロック・発射
-    KeyCode MissileChange = KeyCode.Mouse2; //ミサイル射撃モード切替
+    KeyCode MissileChange = KeyCode.LeftControl; //ミサイル射撃モード切替
     KeyCode Jump = KeyCode.Space; //跳躍
+    KeyCode Shield = KeyCode.Mouse2; //シールドオンオフ
 
     //----------------------------------------------------------------------------------------------
     // ユーザー名取得
@@ -69,17 +71,22 @@ public class Azrael : UserScript {
         } else if (Input.GetKeyDown(SwordOn) && sword) {
             sword = false;
         }
-        if (sword && energy > 10 && !spin) {
+        if (sword && energy > 10) {
             ap.StartAction("ATK3BF", 1);
         }
 
+        //連続攻撃
         if (energy > 30 && !spin && Input.GetKeyDown(SwordSpin)) {
-            ap.StartAction("spin", -1);
+            ap.StartAction("ATK3", -1);
             sword = false;
             spin = true;
         } else if (spin && (energy < 10 || sword || Input.GetKeyDown(SwordSpin))) {
-            ap.EndAction("spin");
+            ap.EndAction("ATK3");
             spin = false;
+            sword = false;
+        }
+        if (spin && energy > 10) {
+            ap.StartAction("ATK3BF", 1);
         }
 
         //ミサイル
@@ -110,6 +117,17 @@ public class Azrael : UserScript {
             ap.StartAction("Jump", -1);
         } else if (!Input.GetKey(Jump) || energy < 10) {
             ap.EndAction("Jump");
+        }
+
+        //シールド
+        if (!shieldFlg && Input.GetKeyDown(Shield)) {
+            shieldFlg = true;
+        } else if (shieldFlg && Input.GetKeyDown(Shield)) {
+            shieldFlg = false;
+        }
+
+        if (shieldFlg && energy > 40) {
+            ap.StartAction("shield", 1);
         }
     }
 }
