@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-public class Tubalkain : UserScript {
+public class Tubalcain : UserScript {
     // 攻撃検出用マスク
     const int MASK_BULLET = 1;  /// 通常弾(Cannon)
 	const int MASK_SHELL = 2;   /// 戦車砲弾(Cannon)
@@ -80,7 +80,7 @@ public class Tubalkain : UserScript {
             ap.StartAction("ATK3", -1);
             sword = false;
             spin = true;
-        } else if (spin && (energy < 10 || sword || Input.GetKeyDown(SwordSpin))) {
+        } else if (spin && (sword || Input.GetKeyDown(SwordSpin))) {
             ap.EndAction("ATK3");
             spin = false;
             sword = false;
@@ -113,7 +113,7 @@ public class Tubalkain : UserScript {
         }
 
         //ジャンプ
-        if (energy > 40 && Input.GetKey(Jump)) {
+        if (energy > 60 && Input.GetKey(Jump)) {
             ap.StartAction("Jump", -1);
         } else if (!Input.GetKey(Jump) || energy < 10) {
             ap.EndAction("Jump");
