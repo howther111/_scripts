@@ -113,7 +113,7 @@ public class Tubalcain : UserScript {
         }
 
         //ジャンプ
-        if (energy > 60 && Input.GetKey(Jump)) {
+        if (energy > 65 && Input.GetKey(Jump)) {
             ap.StartAction("Jump", -1);
         } else if (!Input.GetKey(Jump) || energy < 10) {
             ap.EndAction("Jump");
@@ -126,7 +126,7 @@ public class Tubalcain : UserScript {
             shieldFlg = false;
         }
 
-        if (shieldFlg && energy > 40) {
+        if (shieldFlg && energy > 60 && !Input.GetKey(Jump)) {
             ap.StartAction("shield", 1);
         }
     }
