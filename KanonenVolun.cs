@@ -1,12 +1,13 @@
-// 防術機トバルカイン用スクリプト
+// 防術機カノーネンヴォルン用スクリプト
 // Armoriser3.csを参考にさせていただきました。さくさく様に感謝
 // 作成者:江ノ宮（howther111）
+
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-public class Tubalcain : UserScript {
+public class KanonenVolun : UserScript {
     // 攻撃検出用マスク
     const int MASK_BULLET = 1;  /// 通常弾(Cannon)
 	const int MASK_SHELL = 2;   /// 戦車砲弾(Cannon)
@@ -15,21 +16,20 @@ public class Tubalcain : UserScript {
 	const int MASK_PLASMA = 16; /// プラズマ(Launcher)
 	const int MASK_LASER = 32;  /// レーザー(Beamer)
 	const int MASK_ALL = 0xff;
+    const int FIRE_COUNT_MAX = 40;
     bool missile;
-    bool sword;
-    bool spin;
-    bool shieldFlg;
+    bool fixFlg;
     int missileMode;
+    int fireCount;
+    int camCount;
 
     //アサイン関係
-    KeyCode Wep1 = KeyCode.Mouse0; //マシンガン射撃
-    KeyCode SwordOn = KeyCode.R; //ビームサイスON・OFF
-    KeyCode SwordSlash = KeyCode.Q; //ビームサイス斬撃
-    KeyCode SwordSpin = KeyCode.E; //ビームサイス回転
+    KeyCode Wep1 = KeyCode.Mouse0; //主砲射撃
+    KeyCode BodyFix = KeyCode.Mouse2; //機体固定
     KeyCode Wep2 = KeyCode.Mouse1; //ミサイルロック・発射
     KeyCode MissileChange = KeyCode.LeftControl; //ミサイル射撃モード切替
     KeyCode Jump = KeyCode.Space; //跳躍
-    KeyCode Shield = KeyCode.Mouse2; //シールドオンオフ
+    KeyCode CamChange = KeyCode.LeftShift; //カメラ切り替え
 
     //----------------------------------------------------------------------------------------------
     // ユーザー名取得
@@ -44,9 +44,10 @@ public class Tubalcain : UserScript {
     //----------------------------------------------------------------------------------------------
     public override void OnStart(AutoPilot ap) {
         missile = false;
-        sword = false;
-        spin = false;
+        fixFlg = false;
+        camCount = 0;
         missileMode = 1;
+        fireCount = FIRE_COUNT_MAX;
     }
 
     //----------------------------------------------------------------------------------------------
@@ -56,35 +57,26 @@ public class Tubalcain : UserScript {
         // 攻撃
         int energy = ap.GetEnergy();
 
+        if ((Input.GetKeyDown(BodyFix) && fixFlg) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.S)
+            || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D)) {
+            fixFlg = false;
+            fireCount = FIRE_COUNT_MAX;
+        } else if ((Input.GetKeyDown(BodyFix) && !fixFlg) || Input.GetKeyDown(Wep1)) {
+            fixFlg = true;
+        }
+
+        if (fixFlg) {
+            if (fireCount > 0) {
+                fireCount = fireCount - 1;
+            }
+            ap.StartAction("FIX", 1);
+        }
+
         //銃
-        if (energy > 10 && Input.GetKey(Wep1)) {
+        if (energy > 30 && fireCount == 0 && Input.GetKey(Wep1) && fixFlg) {
             ap.StartAction("ATK1", -1);
         } else {
             ap.EndAction("ATK1");
-        }
-
-        //ソード
-        if (energy > 30 && (Input.GetKeyDown(SwordOn) || Input.GetKeyDown(SwordSlash)) && !sword) {
-            sword = true;
-        } else if (Input.GetKeyDown(SwordOn) && sword) {
-            sword = false;
-        }
-        if (sword && energy > 10) {
-            ap.StartAction("ATK3BF", 1);
-        }
-
-        //連続攻撃
-        if (energy > 30 && !spin && Input.GetKeyDown(SwordSpin)) {
-            ap.StartAction("ATK3", -1);
-            sword = false;
-            spin = true;
-        } else if (spin && (sword || Input.GetKeyDown(SwordSpin))) {
-            ap.EndAction("ATK3");
-            spin = false;
-            sword = false;
-        }
-        if (spin && energy > 10) {
-            ap.StartAction("ATK3BF", 1);
         }
 
         //ミサイル
@@ -113,19 +105,22 @@ public class Tubalcain : UserScript {
         //ジャンプ
         if (energy > 65 && Input.GetKey(Jump)) {
             ap.StartAction("Jump", -1);
+            fixFlg = false;
+            fireCount = FIRE_COUNT_MAX;
         } else if (!Input.GetKey(Jump) || energy < 10) {
             ap.EndAction("Jump");
         }
 
-        //シールド
-        if (!shieldFlg && Input.GetKeyDown(Shield)) {
-            shieldFlg = true;
-        } else if (shieldFlg && Input.GetKeyDown(Shield)) {
-            shieldFlg = false;
+        if (Input.GetKeyDown(CamChange) && camCount < 2) {
+            camCount = camCount + 1;
+        } else if (Input.GetKeyDown(CamChange) && camCount >= 2) {
+            camCount = 0;
         }
 
-        if (shieldFlg && energy > 60 && !Input.GetKey(Jump)) {
-            ap.StartAction("shield", 1);
+        if (camCount == 1) {
+            ap.StartAction("Camera", 1);
+        } else if (camCount == 2) {
+            ap.StartAction("CamPlus", 1);
         }
     }
 }
