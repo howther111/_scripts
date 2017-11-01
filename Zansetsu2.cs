@@ -129,7 +129,7 @@ public class Zansetsu2 : UserScript {
             int enemyDistance = ap.GetEnemyDistance();
             // エイム(敵の速度と距離を考慮して目標座標を補正)
             Vector3 ev = ap.GetEnemyVelocity() - ap.GetVelocity();
-            float ed = enemyDistance * 0.003f;
+            float ed = enemyDistance * 0.001f;
             Vector3 mv = ap.MulVec(ap.GetEnemyVelocity(), ed);
             Vector3 estPos = ap.AddVec(ap.GetEnemyPosition(), mv);
             ap.Aim(estPos);
