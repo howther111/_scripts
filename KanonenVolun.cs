@@ -30,6 +30,7 @@ public class KanonenVolun : UserScript {
     KeyCode MissileChange = KeyCode.LeftControl; //ミサイル射撃モード切替
     KeyCode Jump = KeyCode.Space; //跳躍
     KeyCode CamChange = KeyCode.LeftShift; //カメラ切り替え
+    KeyCode backMove = KeyCode.S; //後退
 
     //----------------------------------------------------------------------------------------------
     // ユーザー名取得
@@ -73,10 +74,9 @@ public class KanonenVolun : UserScript {
         }
 
         //銃
-        if (energy > 30 && fireCount == 0 && Input.GetKey(Wep1) && fixFlg) {
-            ap.StartAction("ATK1", -1);
-        } else {
-            ap.EndAction("ATK1");
+        if (energy > 30 && fireCount == 0 && Input.GetKey(Wep1) && fixFlg && !Input.GetKeyDown(KeyCode.W) && !Input.GetKeyDown(KeyCode.S)
+            && !Input.GetKeyDown(KeyCode.A) && !Input.GetKeyDown(KeyCode.D)) {
+            ap.StartAction("ATK1", 1);
         }
 
         //ミサイル
